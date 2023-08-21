@@ -1,0 +1,1154 @@
+create database HITUAlpha;
+use HITUAlpha;
+use hitu;
+
+#Craer tabla rol
+create table rols(
+id bigint auto_increment primary key,
+rol varchar(60) not null
+);
+
+#Crear tabla Status
+create table status_(
+	id bigint auto_increment primary key,
+    type_status varchar(60)
+);
+
+#Crear tabla Imagen
+create table images(
+id bigint auto_increment primary key,
+image mediumblob,
+file_name varchar(255) not null
+);
+
+#Crear tabla Usuarios 
+create table users(
+id bigint auto_increment primary key,
+name_ varchar(60)not null,
+lastname varchar(60) not null,
+surname varchar(60),
+birthday date not null,
+sex varchar(30)not null,
+email varchar (80)not null,
+pass varbinary(255) not null,
+token varchar (30),
+rol_id bigint not null references rols(id),
+status_id bigint not null references status_(id),
+image_id bigint references images(id) 
+);
+
+#Crear tabla Categoria 
+create table categories(
+id bigint auto_increment primary key,
+category varchar(45)not null,
+img_id int
+);
+#Crear tabla Historia
+create table stories(
+id bigint auto_increment primary key,
+title varchar(80)not null,
+content text not null,
+created_atDATETIME date not null,
+image_id bigint,
+status_id  bigint not null,
+user_id bigint not null,
+category_id bigint not null,
+foreign key (status_id) references status_(id),
+foreign key (user_id) references users(id),
+foreign key(image_id) references images(id),
+foreign key(category_id) references categories(id)
+);
+
+
+#crear tabla likes
+create table likes(
+story_id bigint not null references stories (id),
+user_id bigint not null references users(id),
+primary key (story_id,user_id)
+);
+
+
+#Crear tabla Compartir
+create table shared(
+story_id bigint not null references stories(id),
+user_id bigint not null references users(id),
+primary key (story_id,user_id)
+);
+
+#Crear Tabla comentarios 
+create table comments(
+id bigint auto_increment primary key,
+content varchar(255) not null,
+story_id bigint not null references stories(id),
+user_id bigint not null references users(id),
+comment_id bigint references comments (id)
+);
+
+#------------------------------INDICES--------------------------------------------------
+#Index para el nombre de los usuarios
+      CREATE INDEX idx_name_users on users(name_);
+      EXPLAIN 
+	  select name_ from users;
+
+#Index para el titulo de historias 
+      CREATE INDEX idx_title_story on stories(title);
+      EXPLAIN 
+	  select title from stories; 
+      
+#Index para la fecha de las historias 
+      CREATE INDEX idx_create_atDATETIME_story on stories(created_atDATETIME);
+      EXPLAIN 
+       select created_atDATETIME from stories; 
+
+#---------------------------INDICES UNICOS--------------------------
+     #Indice para los correos electronicos
+     CREATE UNIQUE INDEX idx_email_user on users(email);
+      
+     
+     #Indice para las categorias 
+     CREATE UNIQUE INDEX idx_name_category  on categories(category);  
+     
+#Indice para las categorias
+     CREATE UNIQUE INDEX idx_name_rol on rols(rol);  
+       
+#-------------------INDICES COMPUESTOS---------------------------
+     
+     #Indice para el nombre completo
+    CREATE INDEX idx_fullname_user on users(name_,lastname);
+
+#Indice para login 
+	CREATE INDEX idx_login_user on users(email,pass);
+
+#Indice para el titulo y fecha de una historia
+	CREATE INDEX idx_titleDate_story on stories(title,created_atDATETIME);     
+
+#----------------VISTAS----------------------------------
+
+       #Historias Populares por likes
+       CREATE VIEW popular_stories_likes as
+		SELECT title as "Titulo Historia",
+        concat(name_,concat(' ',lastname)) as "Autor",
+        category as Categoria,
+        image as 'Imagen',
+		count(likes.story_id)as "Numero_de_Likes"
+		FROM stories
+		inner join users on users.id=stories.user_id
+        inner join images on images.id=stories.image_id
+		inner join categories on categories.id=category_id 
+		inner join likes on likes.story_id=stories.id
+        group by(likes.story_id) order by(likes.story_id)asc limit 5; 
+
+       #Historias Populares por Cometarios
+		 CREATE VIEW popular_stories_commentt as
+		SELECT title as "Titulo Historia",
+        concat(name_,concat(' ',lastname)) as "Autor",
+        category as Categoria,
+        image as 'Imagen',
+		count(story_id)as "Numero_de_Comentarios"
+		FROM stories
+		inner join users on users.id=stories.user_id
+        inner join images on images.id=stories.image_id
+		inner join categories on categories.id=category_id 
+        inner join comments on comments.story_id=stories.id 
+		group by(story_id) 
+        order by(Numero_de_Comentarios)desc limit 5;   
+       
+        #Historias Populares por Compartidas
+			CREATE VIEW popular_stories_shared as
+				SELECT upper( title) as "Titulo Historia",
+					upper(concat(name_,concat(' ',lastname))) as "Autor",
+					upper(category) as Categoria,
+                    image as 'Imagen',
+					count(story_id)as "Numero_de_Veces_Compartido"
+                    FROM stories
+				inner join users on users.id=stories.user_id
+				inner join images on images.id=stories.image_id
+				inner join categories on categories.id=category_id 
+				inner join shared on shared.story_id=stories.id 
+				group by(story_id) order by(Numero_de_Veces_Compartido)desc limit 5;  
+ 
+            
+		#Historias Publicadas recientemente
+	    CREATE VIEW recent_stories AS
+            select upper(title) as "Story Tittle",
+            upper(name_) as "Nombre",
+            created_atDATETIME as "Publication date",
+            upper(category) as "Category",
+            image as Imagen
+            from stories
+            inner join images on images.id=stories.image_id
+            inner join users on stories.user_id=users.id
+            inner join status_ on status_.id=stories.status_id
+            inner join categories on stories.category_id=categories.id  
+            where type_status='Publicado'
+            order by(created_atDATETIME) desc LIMIT 5;
+	
+        ##Historia-Comentarios
+        CREATE VIEW story_commnett as 
+        select 
+        concat(name_,concat(' ',lastname)) as "Nombre",
+        title as Historias,
+        stories.content as Contenido,
+        stories.created_atDATETIME as 'Fecha de Publicacion' ,
+        image as imagen,
+        comments.content as comentario,
+        comments.user_id as 'Persona que comento'
+        from stories
+        inner join users on users.id=stories.user_id
+        inner join comments on comments.story_id=stories.id
+        inner join images on images.id=stories.image_id 
+        inner join status_ on status_.id=stories.status_id
+        where type_status='Publicado';
+        
+    #Persona que comento la historia     
+	select name_,title from users
+	inner join comments on comments.id =users.id
+	inner join stories on stories.user_id =users.id;
+  
+	Create view Admins as 
+    select 
+			concat(name_,concat(' ',lastname)) as "Administrador",
+			sex as 'Sexo',
+			email as 'Correo Eletronico',
+			type_status 'Status',
+			image as 'Imagen'
+        from users
+        inner join status_ on status_.id=users.status_id
+        inner join images on images.id=users.image_id
+        inner join rols on rols.id=users.rol_id
+        where  rol='Admin' or rol='SuperAdmin';
+        
+        select name_ ,rol from users 
+		inner join rols on rols.id=users.rol_id
+        where  rol='Admin' or rol='SuperAdmin';
+        
+        
+create table log (
+	id int auto_increment primary key,
+    table_ varchar(50)not null,
+    event_ varchar(50) not null,
+	new_ text,
+    old_ text,
+    date_ datetime not null
+    );
+        
+## Comment Before Update
+DELIMITER $$
+create trigger nuevo_comment_minor_250 before insert on comments
+	for each row
+	begin
+			if length(new.content) = 250 then
+				SIGNAL SQLSTATE '45000' SET message_text = 'LONGITUD DE COMENTARIO EXCEDIDA';
+			end if;
+	end;$$
+
+
+
+#Actualizar con la fecha actal cuando se actualice el status de la historia    
+DELIMITER $$
+create trigger update_created_atDATETIME before update on stories
+	for each row
+	begin
+     declare dateUpdate date;
+			if  new.status_id =3  then
+				set  new.created_atDATETIME = NOW();
+			else 
+				SIGNAL SQLSTATE '45000' SET message_text = 'El status no puede ser actualizado porque el historia se encuetra publicado';
+            end if;
+	end;$$ 
+
+#3
+#detecta palabras altisonantes
+DELIMITER $$
+CREATE TRIGGER detect_high_sounding
+BEFORE INSERT ON stories
+FOR EACH ROW
+BEGIN
+    DECLARE altisonantes_count INT;
+    DECLARE altisonantes_found INT;
+    DECLARE altisonantes_list VARCHAR(255);
+    
+    SET altisonantes_list = 'tonto,inversimil,estupido,invesil';
+    
+    SET altisonantes_count = CHAR_LENGTH(altisonantes_list) - CHAR_LENGTH(REPLACE(altisonantes_list, ',', '')) + 1;
+    SET altisonantes_found = 0;
+    
+    WHILE altisonantes_count > 0 DO
+        IF LOCATE(SUBSTRING_INDEX(altisonantes_list, ',', 1), NEW.content) > 0 THEN
+            SET altisonantes_found = 1;
+            
+        END IF;
+        
+        SET altisonantes_list = SUBSTRING(altisonantes_list, LOCATE(',', altisonantes_list) + 1);
+        SET altisonantes_count = altisonantes_count - 1;
+    END WHILE;
+    
+    IF altisonantes_found = 1 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ERROR Se detectaron palabras altisonantes en el contenido.';
+    END IF;
+END $$
+
+#detecta palabras altisonantes en los comentarios 
+DELIMITER $$
+CREATE TRIGGER detect_high_commnet1
+BEFORE INSERT ON comments
+FOR EACH ROW
+BEGIN
+    DECLARE altisonantes_count INT;
+    DECLARE altisonantes_found INT;
+    DECLARE altisonantes_list VARCHAR(255);
+    
+    SET altisonantes_list = 'tonto,inversimil,estupido,invesil';
+    
+    SET altisonantes_count = CHAR_LENGTH(altisonantes_list) - CHAR_LENGTH(REPLACE(altisonantes_list, ',', '')) + 1;
+    SET altisonantes_found = 0;
+    
+    WHILE altisonantes_count > 0 DO
+        IF LOCATE(SUBSTRING_INDEX(altisonantes_list, ',', 1), NEW.content) > 0 THEN
+            SET altisonantes_found = 1;
+            
+        END IF;
+        
+        SET altisonantes_list = SUBSTRING(altisonantes_list, LOCATE(',', altisonantes_list) + 1);
+        SET altisonantes_count = altisonantes_count - 1;
+    END WHILE;
+    
+    IF altisonantes_found = 1 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ERROR Se detectaron palabras altisonantes en el contenido.';
+    END IF;
+END $$
+
+#5
+#Evitar que se inserten doble like de la misma persona y de la misma historia   
+DELIMITER $$
+CREATE TRIGGER before_insert_likes
+BEFORE INSERT ON likes
+FOR EACH ROW
+BEGIN
+    DECLARE count_likes INT;
+    SET count_likes = 0;
+    SELECT COUNT(*) INTO count_likes
+    FROM likes
+    WHERE story_id = NEW.story_id AND user_id = NEW.user_id;
+
+    IF count_likes > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'No se permite volver a dar like a la misma historia.';
+    END IF;
+END$$
+#6
+
+##Valida que exista la categoria 
+DELIMITER $$
+CREATE TRIGGER validate_category_id
+BEFORE INSERT ON stories
+FOR EACH ROW
+BEGIN
+    DECLARE category_count INT;
+    
+    SELECT COUNT(*) INTO category_count FROM categories WHERE id = NEW.category_id;
+    
+    IF category_count = 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error, la categoría no es valida.';
+    END IF;
+END $$
+
+#7
+DELIMITER $$
+CREATE TRIGGER invalid_birthday_update
+after UPDATE ON users
+FOR EACH ROW
+BEGIN
+IF extract(year from new.birthday)<1900 THEN
+ SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'error, año de nacimiento invalido.';
+ END IF;
+END $$
+
+#8 disparador para cambiar el nombre drop trigger cambiar_nombre;
+DELIMITER $$
+CREATE TRIGGER change_name before insert on users
+for each row
+begin
+	if length(NEW.name_) > 30 THEN
+    SET NEW.name_=substr(NEW.name_,1,30);
+          SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'El nombre es demasiado largo.';
+	end if;
+    end;$$
+    
+#9 crear un disparador para insertar un usuario
+DELIMITER $$
+create trigger log_name after insert on users
+for each row 
+BEGIN 
+	DECLARE datos varchar(255);
+    SET datos = concat('id: ',new.id,'Nombre: ',new.name_);
+    insert into log (table_,event_,new_,date_) values ('Usuario','Insert',datos,sysdate());
+END;$$
+
+#10 disparador para registrar los cambios a la tabla usuarios
+DELIMITER $$
+CREATE TRIGGER log_name_update AFTER UPDATE ON users
+FOR EACH ROW
+BEGIN
+    DECLARE datos_new VARCHAR(255);
+    DECLARE datos_old VARCHAR(255);
+    
+    SET datos_new = CONCAT('id: ', new.id, ' Nombre: ', new.name_, ' Lastname: '
+    , new.lastname, ' surname: ', new.surname,'Birthday ',new.birthday,' Sex: ',
+    new.sex, ' Email: ', new.email);
+    
+    
+    SET datos_old = CONCAT('id: ', old.id, ' Nombre: ', old.name_, ' Lastname: ',
+    old.lastname, ' surname: ', old.surname,' Sex: ', old.sex, ' Email: ', old.email);
+    
+    INSERT INTO log (table_, event_, old_,new_, date_) VALUES ('Usuario', 'update', datos_new, datos_old, SYSDATE());
+END $$
+
+#11
+DROP TRIGGER check_foreign_keys;
+DELIMITER $$
+CREATE TRIGGER check_foreign_keys BEFORE DELETE ON users
+FOR EACH ROW
+BEGIN
+    DECLARE contenido INT;
+  
+    SELECT COUNT(*) INTO contenido FROM likes
+    WHERE user_id = old.id;
+    
+    IF contenido > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: No se puede ELIMINAR..';
+    END IF;
+    
+    SELECT COUNT(*) INTO contenido FROM comments
+    WHERE user_id = OLD.id;
+    
+    IF contenido > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: No se puede ELIMINAR..';
+    END IF;
+    
+    SELECT COUNT(*) INTO contenido FROM shared
+    WHERE user_id = OLD.id;
+    
+    IF contenido > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: No se puede ELIMINAR..';
+    END IF;
+    
+    SELECT COUNT(*) INTO contenido FROM stories WHERE user_id = old.id;
+    
+    IF contenido > 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: No se puede ELIMINAR..';
+    END IF;
+END;$$
+
+   SELECT COUNT(*) FROM stories WHERE user_id = 3;
+drop trigger log_name_delete;
+
+#12 Disparador para eliminar usuarios 
+DELIMITER $$
+CREATE TRIGGER log_name_delete after delete on users
+for each row
+BEGIN
+	DECLARE datos_old varchar(255);
+    SET datos_old=CONCAT('ID: ',old.id, 'Nombre: ',old.name_);
+    insert into log (table_,event_,old_,date_) values('Usuario','Delete',datos_old,sysdate());
+END;$$
+
+/*----------------disparador para eliminar comentarios--------------------------*/
+
+#16
+DELIMITER $$
+CREATE TRIGGER log_storie_delete after delete on stories
+for each row
+BEGIN
+	DECLARE datos_old varchar(255);
+    SET datos_old=CONCAT('ID: ',old.id, 'Titulo: ',old.title);
+    insert into log (table_,event_,old_,date_) values('Historia','Eliminada',datos_old,sysdate());
+END;$$
+
+#------------------------------------ procedimientos------------------------------
+
+
+
+#mostrar categorias todas
+
+DELIMITER //
+CREATE PROCEDURE ShowCategories()
+BEGIN
+    SELECT * FROM categories;
+END //
+
+DELIMITER ;
+CALL ShowCategories();
+
+
+
+#borrar categorias
+DELIMITER //
+CREATE PROCEDURE DeleteCategory(IN category_id BIGINT)
+BEGIN
+    DELETE FROM categories WHERE id = category_id;
+END //
+DELIMITER ;
+CALL DeleteCategory();
+
+
+#Listar todas las imgenes
+DELIMITER //
+CREATE PROCEDURE ImageList()
+BEGIN
+    SELECT  * FROM images;
+end //
+DELIMITER ;
+
+Call ImageList();
+
+
+
+
+#encontrar una imagen
+DELIMITER //
+CREATE PROCEDURE SelectImageById(IN image_id BIGINT)
+BEGIN
+    SELECT * FROM images WHERE id = image_id;
+END //
+DELIMITER ;
+call SelectImageById(1);
+
+
+
+#findOne Categorias
+DELIMITER //
+CREATE PROCEDURE SelectCategoryById(IN category_id BIGINT)
+BEGIN
+    SELECT * FROM categories WHERE id = category_id;
+END //
+DELIMITER ;
+
+
+
+#insertar imagenes
+DELIMITER //
+CREATE PROCEDURE InsertImage(IN image_data MEDIUMBLOB, IN file_name VARCHAR(50))
+BEGIN
+    INSERT INTO images (image, file_name) VALUES (image_data, file_name);
+END //
+DELIMITER ;
+#CALL InsertImage(<image_data>, '<filename>');
+
+
+
+
+# insertar categoria con id imagen
+DELIMITER //
+CREATE PROCEDURE InsertCategoryWithImage(IN category_name VARCHAR(45), IN img_id BIGINT)
+BEGIN
+    INSERT INTO categories (category, img_id) VALUES (category_name, img_id);
+END //
+DELIMITER ;
+
+
+
+drop procedure InsertCategoryWithImage;
+
+#insertar categoria ya con la imagen
+DELIMITER //
+CREATE PROCEDURE InsertCategoryWithImage(
+    IN category_name VARCHAR(45),
+    IN image_data MEDIUMBLOB,
+    IN file_name VARCHAR(50)
+)
+BEGIN
+    DECLARE img_id BIGINT;
+
+    INSERT INTO images (image, file_name) VALUES (image_data, file_name);
+    SET img_id = LAST_INSERT_ID();
+
+    INSERT INTO categories (category, img_id) VALUES (category_name, img_id);
+END //
+DELIMITER ;
+
+CALL InsertCategoryWithImage('categoría',1, 'imagen.jpg');
+
+
+
+#Actualizar imagen
+DELIMITER //
+CREATE PROCEDURE UpdateImage(IN image_data MEDIUMBLOB, IN file_name VARCHAR(50), IN image_id BIGINT)
+BEGIN
+    UPDATE images SET image = image_data, file_name = file_name WHERE id = image_id;
+END //
+DELIMITER ;
+call UpdateImage(1,'nombre',1);
+
+
+#actualizar categoria con la imagen
+
+DELIMITER //
+CREATE PROCEDURE UpdateCategory(IN new_category_name VARCHAR(45), IN new_img_id BIGINT, IN category_id BIGINT)
+BEGIN
+    UPDATE categories SET category = new_category_name, img_id = new_img_id WHERE id = category_id;
+END //
+DELIMITER ;
+
+
+#insertar historias
+/*
+DELIMITER //
+CREATE PROCEDURE InsertStory(
+    IN p_title VARCHAR(80),
+    IN p_content TEXT,
+    IN p_user_id BIGINT,
+    IN p_category_id BIGINT,
+    IN p_image_id BIGINT
+)
+BEGIN
+    INSERT INTO stories (title,content,created_atDATETIME,status_id,user_id,category_id,image_id)
+    VALUES (p_title,p_content,CURDATE(),3,p_user_id,p_category_id,p_image_id);
+END //
+DELIMITER ;*/
+
+DELIMITER //
+CALL InsertStory('Título del Story', 'Contenido del Story', 1, 1, 789);
+//
+DELIMITER ;
+
+
+
+#find One historia
+DELIMITER //
+
+CREATE PROCEDURE GetStoryById(IN story_id BIGINT)
+BEGIN
+    SELECT
+        s.id AS story_id,
+        s.title AS story_title,
+        s.content AS story_content,
+        s.created_atDATETIME AS story_created_at,
+        i.image AS image_data,
+        st.type_status AS status_type,
+        c.category AS category_name
+    FROM
+        stories s
+        JOIN images i ON s.image_id = i.id
+        JOIN status_ st ON s.status_id = st.id
+        JOIN categories c ON s.category_id = c.id
+    WHERE
+        s.id = story_id;
+END //
+DELIMITER ;
+select * from stories;
+call GetStoryByID(23);
+
+
+#Actualizar historia
+DELIMITER //
+CREATE PROCEDURE UpdateStoryByID(IN p_title VARCHAR(80),IN p_content TEXT,IN p_image_id BIGINT,IN p_status_id BIGINT,IN p_user_id BIGINT,IN p_category_id BIGINT,IN p_story_id BIGINT
+)
+BEGIN
+    UPDATE stories
+    SET
+        title = p_title,content = p_content,created_atDATETIME = CURDATE(),image_id = p_image_id,status_id = p_status_id,user_id = p_user_id,category_id = p_category_id
+    WHERE id = p_story_id;
+END //
+DELIMITER ;
+
+DELIMITER //
+
+
+
+CREATE PROCEDURE UpdateStoryWithImageByID(
+    IN p_title VARCHAR(80),
+    IN p_content TEXT,
+    IN p_new_image_data MEDIUMBLOB,
+    IN p_file_name VARCHAR(50),
+    IN p_status_id BIGINT,
+    IN p_user_id BIGINT,
+    IN p_category_id BIGINT,
+    IN p_story_id BIGINT
+)
+BEGIN
+    DECLARE image_id BIGINT;
+
+    -- Insertar la nueva imagen y obtener su ID
+    INSERT INTO images (image, file_name) VALUES (p_new_image_data, p_file_name);
+    SET image_id = LAST_INSERT_ID();
+
+    -- Actualizar la historia con la nueva información
+    UPDATE stories
+    SET
+        title = p_title,
+        content = p_content,
+        created_atDATETIME = CURDATE(),
+        image_id = image_id,
+        status_id = p_status_id,
+        user_id = p_user_id,
+        category_id = p_category_id
+    WHERE id = p_story_id;
+END //
+DELIMITER ;
+
+CALL UpdateStoryWithImageByID(
+    'Nuevo título de la historia',
+    'Nuevo contenido de la historia',
+    1, -- Nuevos datos de la imagen en formato binario
+    'nuevo_nombre_imagen.jpg', -- Nuevo nombre del archivo de la imagen
+    4, -- Nuevo ID de estado
+    54321, -- Nuevo ID de usuario
+    9876, -- Nuevo ID de categoría
+    1234 -- ID de la historia que se actualizará
+);
+
+
+
+
+DELIMITER //
+
+
+#Mostrar historias por usuario
+CREATE PROCEDURE ShowStoriesByUSer(IN p_user_id BIGINT)
+BEGIN
+    SELECT
+        s.id AS story_id,
+        s.title,
+        s.content,
+        s.created_atDATETIME,
+        s.image_id,
+        i.file_name,
+        s.status_id,
+        st.type_status AS status,
+        s.category_id,
+        c.category AS category_name
+    FROM stories s
+    INNER JOIN images i ON s.image_id = i.id
+    INNER JOIN status_ st ON s.status_id = st.id
+    INNER JOIN categories c ON s.category_id = c.id
+    WHERE s.user_id = p_user_id;
+END //
+
+DELIMITER ;
+call ShowStoriesByUser(17);
+
+
+
+
+#Mostrar articulos en espera
+DELIMITER  //
+CREATE PROCEDURE ShowWaitingArticles()
+BEGIN
+    SELECT
+        s.id AS story_id,
+        s.title,
+        s.content,
+        s.created_atDATETIME,
+        s.image_id,
+        i.file_name,
+        s.status_id,
+        st.type_status AS status,
+        s.category_id,
+        c.category AS category_name
+    FROM stories s
+    INNER JOIN images i ON s.image_id = i.id
+    INNER JOIN status_ st ON s.status_id = st.id
+    INNER JOIN categories c ON s.category_id = c.id
+    WHERE s.status_id = 4;
+END //
+
+DELIMITER ;
+call ShowWaitingArticles();
+
+
+
+
+#muestra para el usuario los articulos aprobados
+DELIMITER  //
+CREATE PROCEDURE ShowAprovedArticles()
+BEGIN
+    SELECT
+        s.id AS story_id,
+        s.title,
+        s.content,
+        s.created_atDATETIME,
+        s.image_id,
+        i.file_name,
+        s.status_id,
+        st.type_status AS status,
+        s.category_id,
+        c.category AS category_name
+    FROM stories s
+    INNER JOIN images i ON s.image_id = i.id
+    INNER JOIN status_ st ON s.status_id = st.id
+    INNER JOIN categories c ON s.category_id = c.id
+    WHERE s.status_id = 5;
+END //
+DELIMITER ;
+call ShowAprovedArticles();
+
+
+
+#Muestra todas las historias
+DELIMITER  //
+CREATE PROCEDURE ShowAllStories()
+BEGIN
+    SELECT
+        s.id AS story_id,
+        s.title,
+        s.content,
+        s.created_atDATETIME,
+        s.image_id,
+        i.file_name,
+        s.status_id,
+        st.type_status AS status,
+        s.category_id,
+        c.category AS category_name
+    FROM stories s
+    INNER JOIN images i ON s.image_id = i.id
+    INNER JOIN status_ st ON s.status_id = st.id
+    INNER JOIN categories c ON s.category_id = c.id;
+END //
+DELIMITER ;
+call ShowAllStories();
+
+
+
+#Aprobar un articulo
+DELIMITER //
+CREATE PROCEDURE UpdateStoryStatus(IN p_story_id BIGINT)
+BEGIN
+    UPDATE stories
+    SET status_id = 5
+    WHERE id = p_story_id;
+END //
+DELIMITER ;
+CALL UpdateStoryStatus(5);
+
+
+
+
+#encontrar una sola historia/articulo
+DELIMITER //
+CREATE PROCEDURE GetStoryByID(IN p_story_id BIGINT)
+BEGIN
+    SELECT
+        s.id AS story_id,
+        s.title,
+        s.content,
+        s.created_atDATETIME,
+        s.image_id,
+        i.file_name,
+        s.status_id,
+        st.type_status AS status,
+        s.category_id,
+        c.category AS category_name
+    FROM stories s
+    INNER JOIN images i ON s.image_id = i.id
+    INNER JOIN status_ st ON s.status_id = st.id
+    INNER JOIN categories c ON s.category_id = c.id
+    WHERE s.id = p_story_id;
+END //
+DELIMITER ;
+CALL GetStoryByID(28);
+
+
+
+
+#Insertar en Shared
+DELIMITER //
+CREATE PROCEDURE InsertShared(IN p_story_id BIGINT, IN p_user_id BIGINT)
+BEGIN
+    INSERT INTO shared (story_id, user_id)
+    VALUES (p_story_id, p_user_id);
+END //
+DELIMITER ;
+CALL InsertShared(28, 17);
+select * from shared;
+
+
+
+
+#Muestra las historias compartidas por el usuario
+DELIMITER //
+CREATE PROCEDURE userSharedStories(IN p_user_id BIGINT)
+BEGIN
+    SELECT
+        st.id AS story_id,
+        u.id AS user_id,
+        u.name_,
+        u.lastname,
+        u.surname,
+        st.title,
+        st.content,
+        i.id AS image_id,
+        i.image
+    FROM shared sh
+    INNER JOIN users u ON sh.user_id = u.id
+    INNER JOIN stories st ON sh.story_id = st.id
+    LEFT JOIN images i ON st.image_id = i.id
+    WHERE sh.user_id = p_user_id;
+END //
+DELIMITER ;
+CALL userSharedStories(17);
+
+
+#borrar compartir
+DELIMITER //
+CREATE PROCEDURE DeleteShared(IN p_user_id BIGINT, IN p_story_id BIGINT)
+BEGIN
+    DELETE FROM shared
+    WHERE user_id = p_user_id AND story_id = p_story_id;
+END //
+DELIMITER ;
+CALL DeleteShared(17, 2);
+
+
+
+
+#Insertar un like
+DELIMITER //
+CREATE PROCEDURE InsertLike(IN p_story_id BIGINT, IN p_user_id BIGINT)
+BEGIN
+    INSERT INTO likes (story_id, user_id)
+    VALUES (p_story_id, p_user_id);
+END //
+DELIMITER ;
+CALL InsertLike(1, 2);
+
+
+drop procedure CountLikesForStory;
+#Conteo de likes por historia
+CREATE PROCEDURE CountLikesForStory(IN storyIdParam BIGINT)
+BEGIN
+    SELECT COUNT(*) FROM likes WHERE story_id = storyIdParam;
+END;
+
+
+CALL CountLikesForStory(1);
+
+
+
+
+#borrar likes
+CREATE PROCEDURE DeleteLike(IN userIdParam BIGINT, IN storyIdParam BIGINT)
+BEGIN
+    DELETE FROM likes WHERE user_id = userIdParam AND story_id = storyIdParam;
+END;
+CALL DeleteLike(123, 456);
+
+
+
+#insertar comentario
+CREATE PROCEDURE InsertComment(IN contentParam VARCHAR(255), IN storyIdParam BIGINT, IN userIdParam BIGINT)
+BEGIN
+    INSERT INTO comments (content, story_id, user_id) VALUES (contentParam, storyIdParam, userIdParam);
+END;
+CALL InsertComment('This is a great story!', 123, 456);
+
+
+#insertar respuesta
+CREATE PROCEDURE InsertarComentarioConPadre(
+    IN contenidoParam VARCHAR(255),
+    IN idHistoriaParam BIGINT,
+    IN idUsuarioParam BIGINT,
+    IN idComentarioPadreParam BIGINT
+)
+BEGIN
+    INSERT INTO comments (content, story_id, user_id, comment_id)
+    VALUES (contenidoParam, idHistoriaParam, idUsuarioParam, idComentarioPadreParam);
+END;
+CALL InsertarComentarioConPadre('¡Estoy de acuerdo!', 123, 789, 1);
+
+
+
+
+#Seleccionar comentarios por historia
+CREATE PROCEDURE showCommentPerStory(IN idHistoriaParam BIGINT)
+BEGIN
+    SELECT * FROM Comments WHERE story_id = idHistoriaParam;
+END;
+
+CALL showCommentPerStory(1);
+
+
+drop procedure AuthenticateUser;
+
+CREATE PROCEDURE AuthenticateUser(
+    IN userEmail VARCHAR(80),
+    IN userPass VARBINARY(255),
+    OUT userName VARCHAR(60),
+    OUT userLastname VARCHAR(60),
+    OUT userSurname VARCHAR(60),
+    OUT userBirthday DATE,
+    OUT userSex VARCHAR(30),
+    OUT userRol VARCHAR(60)
+)
+BEGIN
+    SELECT u.name_, u.lastname, u.surname, u.birthday, u.sex, r.rol
+    INTO userName, userLastname, userSurname, userBirthday, userSex, userRol
+    FROM users u
+    INNER JOIN rols r ON u.rol_id = r.id
+    WHERE u.email = userEmail AND u.pass = userPass AND u.status_id = 1;
+END;
+CALL AuthenticateUser('correo@ejemplo.com', 'contraseña', 'userName', 'userLastname', 'userSurname', 'userBirthday', 'userSex', 1);
+
+
+
+
+
+#encuentra a todos los admins
+CREATE PROCEDURE SelectUsersByRole()
+BEGIN
+    SELECT *
+    FROM users
+    WHERE rol_id != 1 AND rol_id != 3;
+END;
+
+
+CALL SelectUsersByRole();
+
+
+#insertar usuarios
+CREATE PROCEDURE InsertUser(
+    IN p_name VARCHAR(60),
+    IN p_lastname VARCHAR(60),
+    IN p_surname VARCHAR(60),
+    IN p_birthday DATE,
+    IN p_sex VARCHAR(30),
+    IN p_email VARCHAR(80),
+    IN p_pass VARBINARY(255)
+)
+BEGIN
+    INSERT INTO users (name_, lastname, surname, birthday, sex, email, pass, rol_id, status_id)
+    VALUES (p_name, p_lastname, p_surname, p_birthday, p_sex, p_email, p_pass, 2, 1);
+END;
+#CALL InsertUser(, , ,,, ,);
+
+
+
+
+#mostrar a los tipo usuario
+CREATE PROCEDURE SelectUsers()
+BEGIN
+    SELECT *
+    FROM users
+    WHERE rol_id != 1 AND rol_id != 2;
+END;
+CALL SelectUsers();
+
+
+
+#find one users
+CREATE PROCEDURE SelectUserById(IN p_id BIGINT)
+BEGIN
+    SELECT *
+    FROM users
+    WHERE id = p_id;
+END;
+
+CALL SelectUserById();
+
+
+
+
+
+#isertar usuarios
+CREATE PROCEDURE InsertUserWithRole3(
+    IN p_name VARCHAR(60),
+    IN p_lastname VARCHAR(60),
+    IN p_surname VARCHAR(60),
+    IN p_birthday DATE,
+    IN p_sex VARCHAR(30),
+    IN p_email VARCHAR(80),
+    IN p_pass VARBINARY(255)
+)
+BEGIN
+    INSERT INTO users (name_, lastname, surname, birthday, sex, email, pass, rol_id, status_id)
+    VALUES (p_name, p_lastname, p_surname, p_birthday, p_sex, p_email, p_pass, 3, 1);
+END;
+CALL InsertUserWithRole3('Jane', 'Doe', 'Smith', '1995-05-15', 'Female', 'jane@example.com', 'contraseña_en_bytes');
+
+
+#Borrar Usuario
+DELIMITER //
+CREATE PROCEDURE DeleteUser(in v_user_id Long)
+BEGIN
+    delete from users where id=v_user_id;
+end //
+DELIMITER ;
+CALL DeleteUser(?);
+
+
+
+
+#Borrar admin
+
+DELIMITER //
+CREATE PROCEDURE DeleteAdmin(in v_user_id Long, in v_rol_id Long)
+BEGIN
+    delete from users where id=v_user_id and rol_id = v_rol_id;
+end //
+DELIMITER ;
+CALL DeleteAdmin(?,?);
+
+
+
+DELIMITER //
+CREATE PROCEDURE InsertStoryWithImage(
+    IN p_title VARCHAR(80),
+    IN p_content TEXT,
+    IN p_user_id BIGINT,
+    IN p_category_id BIGINT,
+    IN p_image_data MEDIUMBLOB,
+    IN p_file_name VARCHAR(50)
+)
+BEGIN
+    DECLARE image_id BIGINT;
+
+    -- Insertar la imagen primero
+    INSERT INTO images (image, file_name) VALUES (p_image_data, p_file_name);
+    SET image_id = LAST_INSERT_ID();
+
+    -- Insertar la historia utilizando el ID de la imagen insertada
+    INSERT INTO stories (title, content, created_atDATETIME, status_id, user_id, category_id, image_id)
+    VALUES (p_title, p_content, CURDATE(), 3, p_user_id, p_category_id, image_id);
+END //
+DELIMITER ;
+
+CALL InsertStoryWithImage(
+    'Título de la historia',
+    'Contenido de la historia',
+    12345, -- ID de usuario
+    6789,  -- ID de categoría
+    '<binary_image_data>',
+    'nombre_imagen.jpg');
+
+
+#Actualizar categoria ya con imagen
+DELIMITER //
+CREATE PROCEDURE UpdateCategoryWithImage(
+    IN categoryIdToUpdate BIGINT,
+    IN newCategoryName VARCHAR(45),
+    IN newImageContent MEDIUMBLOB,
+    IN newFileName VARCHAR(50)
+)
+BEGIN
+    DECLARE existingImageId BIGINT;
+
+    -- Actualizar la imagen en la tabla "images" si es necesario
+    UPDATE images SET image = newImageContent, file_name = newFileName WHERE id = (
+        SELECT img_id FROM categories WHERE id = categoryIdToUpdate
+    );
+
+    -- Actualizar la categoría en la tabla "categories"
+    UPDATE categories SET category = newCategoryName WHERE id = categoryIdToUpdate;
+END //
+
+DELIMITER ;
+
+CALL UpdateCategoryWithImage(1, 'Updated Nature', 1, 'updated_nature_image.jpg');
+select * from categories;
+
+
+create procedure Login(v_email varchar(50), v_pass varchar(50))
+begin
+select users.*,rols.rol from users
+inner join rols on rols.id=users.rol_id
+where email=v_email and pass=v_pass and status_id=1;
+end;
